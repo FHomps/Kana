@@ -35,7 +35,6 @@ Results::Results(sf::Font const* font) {
 			if ((i == 1 || i == 3) && (j == 7 || j == 9)) {}
 			else if (i == 2 && j == 9) {}
 			else {
-				std::cout << index << std::endl;
 				_kanas[index].setPosition(cs/2 + j*csp, cs/2 + 5*csp + 80 + i*csp);
 				index++;
 			}
