@@ -1,19 +1,17 @@
-#ifndef TEST_HPP
-#define TEST_HPP
+#ifndef CARD_HPP
+#define CARD_HPP
 
-class Test : public sf::Drawable, public sf::Transformable {
+class Card : public sf::Drawable, public sf::Transformable {
 public:
-	Test(int kanaIndex, sf::Font const* font);
+	Card(int kanaIndex, sf::Font const* font, bool highlighted = false);
 
 	int getIndex() const { return _index; }
 
+	bool isMoving() const { return _isMoving; }
+
 	void update();
 
-	void startMoveLeft() { _isMoving = true; }
-
-	void startHighlighting() { if (_isHighlighted) return; _isHighlighting = true; _isDarkening = false; }
-
-	void stopHighlighting() { if (!_isHighlighted) return; _isHighlighting = false; _isDarkening = true; }
+	void startMoving(bool toHighlight = false);
 
 private:
 	virtual void draw(sf::RenderTarget& target, sf::RenderStates states) const;
@@ -24,10 +22,12 @@ private:
 	sf::Text _kana;
 
 	bool _isMoving = false;
+	float _initialPos = 0;
 	bool _isHighlighting = false;
 	bool _isDarkening = false;
 
-	bool _isHighlighted = false;
+	bool _isNormal;
+	bool _isHighlighted;
 
 	//float-typed color mirror, necessary due to color change speed rounding to 0 if using bytes for rgb values
 	sf::Vector3f _preciseColor = sf::Vector3f(color_normal.r, color_normal.g, color_normal.b);

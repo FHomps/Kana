@@ -1,9 +1,11 @@
 #include "Main.hpp"
 #include "KeyRead.hpp"
 #include "Kana.hpp"
+#include "Card.hpp"
 #include <iostream>
 #include <random>
 #include <fstream>
+#include <queue>
 
 const float timeout = 3.f;
 
@@ -14,28 +16,32 @@ void fail(sf::Text& failText, int index) {
 }
 
 int main()
-{
-	float weights[2*nTotal];
+{	
+	float oldWeights[2*nTotal];
+	float currentWeights[2*nTotal];
 
 	std::fstream fs;
 	fs.open("data/weights.bin", std::ios::binary | std::ios::in | std::ios::ate);
 	
 	if (fs.is_open() && fs.tellg() == 2*nTotal*sizeof(float)) {
 		fs.seekg(0);
-		fs.read(reinterpret_cast<char*>(weights), 2*nTotal*sizeof(float));
+		fs.read(reinterpret_cast<char*>(oldWeights), 2*nTotal*sizeof(float));
 		fs.close();
 	}
 	else {
 		for (int i = 0; i < 2*nTotal; i++)
-		weights[i] = 1.f;
+		oldWeights[i] = 1.f;
+	}
+	for (int i = 0; i < 2*nTotal; i++) {
+		currentWeights[i] = oldWeights[i];
 	}
 	
 	fs.close();
 
-	std::discrete_distribution<int> dd(weights, weights + nTotal);
+	std::discrete_distribution<int> dd(currentWeights, currentWeights + nTotal);
 	std::default_random_engine gen(time(NULL));
 
-	sf::RenderWindow window(sf::VideoMode(900, 800), "SFML works!");
+	sf::RenderWindow window(sf::VideoMode(900, 800), "Kana trainer");
 	sf::Vector2f winSize = (sf::Vector2f) window.getSize();
 	window.setFramerateLimit(60);
 
@@ -53,12 +59,23 @@ int main()
 	const int nFonts = 4;
 	sf::Font* fonts[nFonts] {&computer, &calligraphy, &hand1, &hand2};
 
-	sf::Text question;
-	question.setCharacterSize(192);
-	question.setPosition(winSize.x / 2, winSize.y / 4);
-
 	sf::Font openSans;
 	openSans.loadFromFile("resources/fonts/OpenSans.ttf");
+
+	const int trail = 2;
+	Card* questions[2 * trail + 1];
+	for (int i = 0; i < 2*trail+1; i++)
+		questions[i] = nullptr;
+	questions[trail] = new Card(dd(gen), fonts[rand() % nFonts], true);
+	questions[trail]->setPosition(winSize.x / 2, winSize.y / 4);
+	for (int i = trail - 1; i >= 0; i--) {
+		questions[i] = new Card(dd(gen), fonts[rand() % nFonts]);
+		questions[i]->setPosition(winSize.x / 2 + 100 + 100*(trail-i), winSize.y / 4);
+	}
+
+	int currentIndex = questions[trail]->getIndex();
+
+	std::queue<std::pair<int, float>> weightChanges;
 
 	sf::Text answer;
 	answer.setFont(openSans);
@@ -73,20 +90,6 @@ int main()
 	failAnswer.setString("");
 	failAnswer.setFillColor(sf::Color(50, 180, 80));
 
-	int index;
-
-	std::function<void()> changeChar = [&]() {
-		question.setFont(*fonts[rand() % nFonts]);
-		index = dd(gen);
-		wchar_t chosenChar = kana[index];
-		question.setString(chosenChar);
-
-		sf::Rect textBounds = question.getLocalBounds();
-		question.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
-	};
-
-	changeChar();
-
 	sf::Clock clock;
 
 	while (window.isOpen())
@@ -100,7 +103,7 @@ int main()
 				if (haps.key.code == sf::Keyboard::BackSpace && ans.getSize() > 0) {
 					answer.setString(ans.substring(0, ans.getSize() - 1));
 					if (!failed) {
-						fail(failAnswer, index);
+						fail(failAnswer, currentIndex);
 						failed = true;
 					}
 				}
@@ -111,24 +114,34 @@ int main()
 				answer.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
 
 				ans = answer.getString();
-				if (ans == romaji[index]) {
-					float newWeight;
+				if (ans == romaji[currentIndex]) {
 					if (failed) {
 						failAnswer.setString("");
 						failed = false;
-						newWeight = weights[index] * 2.f;
-						newWeight = fminf(newWeight, 10);
+						
+						weightChanges.push(std::pair<int, float>(currentIndex, fminf(oldWeights[currentIndex] * 2.f, 10.f)));
 					}
 					else {
-						newWeight = weights[index] / 1.5f;
-						newWeight = fmaxf(newWeight, 1.f);
+						weightChanges.push(std::pair<int, float>(currentIndex, fmaxf(oldWeights[currentIndex] / 1.5f, .5f)));
 					}
 
-					int oldIndex = index;
-					weights[index] = 0.f; //Temporary weight of 0 to prevent instant repetition
-					dd = std::discrete_distribution(weights, weights + nTotal);
-					changeChar();
-					weights[oldIndex] = newWeight;
+					currentWeights[weightChanges.front().first] = weightChanges.front().second;
+					weightChanges.pop();
+
+					//Advance the card queue
+					if (questions[2*trail] != nullptr)
+						delete questions[2*trail];
+					for (int i = 2*trail; i > 0; i--) {
+						questions[i] = questions[i-1];
+						if (questions[i] != nullptr)
+							questions[i]->startMoving(i == trail);
+					}
+					currentIndex = questions[trail]->getIndex();
+
+					//Generate a new card
+					dd = std::discrete_distribution(currentWeights, currentWeights + nTotal);
+					questions[0] = new Card(dd(gen), fonts[rand() % nFonts]);
+					questions[0]->setPosition(winSize.x / 2 + 100 + 100*trail, winSize.y / 4);
 
 					answer.setString("");
 					clock.restart();
@@ -137,20 +150,30 @@ int main()
 		}
 
 		if (clock.getElapsedTime().asSeconds() > timeout && !failed) {
-			fail(failAnswer, index);
+			fail(failAnswer, currentIndex);
 			failed = true;
 		}
 
 		window.clear();
-		window.draw(question);
+		for (int i = 0; i < 2*trail+1; i++) {
+			if (questions[i] != nullptr) {
+				questions[i]->update();
+				window.draw(*questions[i]);
+			}
+		}
 		window.draw(answer);
 		window.draw(failAnswer);
 		window.display();
 	}
+
+	for (int i = 0; i < 2*trail + 1; i++) {
+		if (questions[i] != nullptr)
+			delete questions[i];
+	}
 	
 	fs.open("data/weights.bin", std::ios::binary | std::ios::out | std::ios::trunc);
 	if (fs.is_open()) {
-		fs.write(reinterpret_cast<char*>(weights), 2*nTotal*sizeof(float));
+		fs.write(reinterpret_cast<char*>(oldWeights), 2*nTotal*sizeof(float));
 	}
 	fs.close();
 
