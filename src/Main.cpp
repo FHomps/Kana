@@ -38,7 +38,7 @@ int main()
 	std::discrete_distribution<int> dd(weights, weights + 2*nTotal);
 	std::default_random_engine gen(time(NULL));
 
-	sf::RenderWindow window(sf::VideoMode(900, 700), "Kana trainer");
+	sf::RenderWindow window(sf::VideoMode(900, 700), "Kana Trainer");
 	sf::Vector2f winSize = (sf::Vector2f) window.getSize();
 	window.setFramerateLimit(60);
 
@@ -154,8 +154,13 @@ int main()
 								currentIndex = questions[trail]->getIndex();
 
 								//Generate a new card
-								dd = std::discrete_distribution(weights, weights + 2*nTotal);
+								//Prevent consecutive appearance of the same kana
+								float weightBuffer = weights[questions[1]->getIndex()];
+								weights[questions[1]->getIndex()] = 0;
+								dd = std::discrete_distribution<int>(weights, weights + 2*nTotal);
 								questions[0] = new Card(dd(gen), fonts[rand() % nFonts]);
+								weights[questions[1]->getIndex()] = weightBuffer;
+
 								questions[0]->setPosition(winSize.x / 2 + 200 + 100*trail, winSize.y / 4);
 								questions[0]->startMoving();
 
