@@ -7,7 +7,7 @@
 #include <fstream>
 #include <queue>
 
-const float timeout = 3.f;
+const float timeout = 2.f;
 
 void fail(sf::Text& failText, int index) {
 	failText.setString(romaji[index % nTotal]);
@@ -38,7 +38,7 @@ int main()
 	
 	fs.close();
 
-	std::discrete_distribution<int> dd(currentWeights, currentWeights + nTotal);
+	std::discrete_distribution<int> dd(currentWeights, currentWeights + 2*nTotal);
 	std::default_random_engine gen(time(NULL));
 
 	sf::RenderWindow window(sf::VideoMode(900, 800), "Kana trainer");
@@ -99,52 +99,61 @@ int main()
 			if (haps.type == sf::Event::Closed)
 				window.close();
 			else if (haps.type == sf::Event::KeyPressed) {
-				sf::String ans = answer.getString();
-				if (haps.key.code == sf::Keyboard::BackSpace && ans.getSize() > 0) {
-					answer.setString(ans.substring(0, ans.getSize() - 1));
-					if (!failed) {
-						fail(failAnswer, currentIndex);
-						failed = true;
+				bool stillMoving = false;
+				for (int i = 0; i < 2*trail + 1; i++) {
+					if (questions[i] != nullptr && questions[i]->isMoving()) {
+						stillMoving = true;
+						break;
 					}
 				}
-				else {
-					answer.setString(ans + keyToStr(haps.key.code));
-				}
-				sf::Rect textBounds = answer.getLocalBounds();
-				answer.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
-
-				ans = answer.getString();
-				if (ans == romaji[currentIndex]) {
-					if (failed) {
-						failAnswer.setString("");
-						failed = false;
-						
-						weightChanges.push(std::pair<int, float>(currentIndex, fminf(oldWeights[currentIndex] * 2.f, 10.f)));
+				if (!stillMoving) {
+					sf::String ans = answer.getString();
+					if (haps.key.code == sf::Keyboard::BackSpace && ans.getSize() > 0) {
+						answer.setString(ans.substring(0, ans.getSize() - 1));
+						if (!failed) {
+							fail(failAnswer, currentIndex);
+							failed = true;
+						}
 					}
 					else {
-						weightChanges.push(std::pair<int, float>(currentIndex, fmaxf(oldWeights[currentIndex] / 1.5f, .5f)));
+						answer.setString(ans + keyToStr(haps.key.code));
 					}
+					sf::Rect textBounds = answer.getLocalBounds();
+					answer.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
 
-					currentWeights[weightChanges.front().first] = weightChanges.front().second;
-					weightChanges.pop();
+					ans = answer.getString();
+					if (ans == romaji[currentIndex % nTotal]) {
+						if (failed) {
+							failAnswer.setString("");
+							failed = false;
+							
+							weightChanges.push(std::pair<int, float>(currentIndex, fminf(oldWeights[currentIndex] * 2.f, 10.f)));
+						}
+						else {
+							weightChanges.push(std::pair<int, float>(currentIndex, fmaxf(oldWeights[currentIndex] / 1.5f, .5f)));
+						}
 
-					//Advance the card queue
-					if (questions[2*trail] != nullptr)
-						delete questions[2*trail];
-					for (int i = 2*trail; i > 0; i--) {
-						questions[i] = questions[i-1];
-						if (questions[i] != nullptr)
-							questions[i]->startMoving(i == trail);
+						currentWeights[weightChanges.front().first] = weightChanges.front().second;
+						weightChanges.pop();
+
+						//Advance the card queue
+						if (questions[2*trail] != nullptr)
+							delete questions[2*trail];
+						for (int i = 2*trail; i > 0; i--) {
+							questions[i] = questions[i-1];
+							if (questions[i] != nullptr)
+								questions[i]->startMoving(i == trail);
+						}
+						currentIndex = questions[trail]->getIndex();
+
+						//Generate a new card
+						dd = std::discrete_distribution(currentWeights, currentWeights + 2*nTotal);
+						questions[0] = new Card(dd(gen), fonts[rand() % nFonts]);
+						questions[0]->setPosition(winSize.x / 2 + 100 + 100*trail, winSize.y / 4);
+
+						answer.setString("");
+						clock.restart();
 					}
-					currentIndex = questions[trail]->getIndex();
-
-					//Generate a new card
-					dd = std::discrete_distribution(currentWeights, currentWeights + nTotal);
-					questions[0] = new Card(dd(gen), fonts[rand() % nFonts]);
-					questions[0]->setPosition(winSize.x / 2 + 100 + 100*trail, winSize.y / 4);
-
-					answer.setString("");
-					clock.restart();
 				}
 			}
 		}
