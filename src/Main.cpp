@@ -1,50 +1,11 @@
 #include "Main.hpp"
 #include "KeyRead.hpp"
+#include "Kana.hpp"
 #include <iostream>
 #include <random>
 #include <fstream>
 
-const int nKana = 45;
-const int nDiac = 25;
-const int nTotal = nKana + nDiac;
-
-const char* romaji[] {
-"a","ka","sa","ta","na","ha","ma","ya","ra","wa",
-"i","ki","shi","chi","ni","hi","mi","ri",
-"u","ku","su","tsu","nu","fu","mu","yu","ru",
-"e","ke","se","te","ne","he","me","re",
-"o","ko","so","to","no","ho","mo","yo","ro","wo",
-
-"ga","chi","da","ba","pa",
-"gi","ji","dji","bi","pi",
-"gu","zu","dzu","bu","pu",
-"ge","ze","de","be","pe",
-"go","zo","do","bo","po"};
-
-const wchar_t kana[] {
-L'あ',L'か',L'さ',L'た',L'な',L'は',L'ま',L'や',L'ら',L'わ',
-L'い',L'き',L'し',L'ち',L'に',L'ひ',L'み',		L'り',
-L'う',L'く',L'す',L'つ',L'ぬ',L'ふ',L'む',L'ゆ',L'る',
-L'え',L'け',L'せ',L'て',L'ね',L'へ',L'め',		L'れ',
-L'お',L'こ',L'そ',L'と',L'の',L'ほ',L'も',L'よ',L'ろ',L'を',
-
-L'が',L'ざ',L'だ',L'ば',L'ぱ',
-L'ぎ',L'じ',L'ぢ',L'び',L'ぴ',
-L'ぐ',L'ず',L'づ',L'ぶ',L'ぷ',
-L'げ',L'ぜ',L'で',L'べ',L'ぺ',
-L'ご',L'ぞ',L'ど',L'ぼ',L'ぽ',
-
-L'ア',L'カ',L'サ',L'タ',L'ナ',L'ハ',L'マ',L'ヤ',L'ラ',L'ワ',
-L'イ',L'キ',L'シ',L'チ',L'ニ',L'ヒ',L'ミ',		L'リ',
-L'ウ',L'ク',L'ス',L'ツ',L'ヌ',L'フ',L'ム',L'ユ',L'ル',
-L'エ',L'ケ',L'セ',L'テ',L'ネ',L'ヘ',L'メ',		L'レ',
-L'オ',L'コ',L'ソ',L'ト',L'ノ',L'ホ',L'モ',L'ヨ',L'ロ',L'ヲ',
-
-L'ガ',L'ザ',L'ダ',L'バ',L'パ',
-L'ギ',L'ジ',L'ヂ',L'ビ',L'ピ',
-L'グ',L'ズ',L'ヅ',L'ブ',L'プ',
-L'ゲ',L'ゼ',L'デ',L'ベ',L'ペ',
-L'ゴ',L'ゾ',L'ド',L'ボ',L'ポ'};
+const float timeout = 3.f;
 
 void fail(sf::Text& failText, int index) {
 	failText.setString(romaji[index % nTotal]);
@@ -63,11 +24,6 @@ int main()
 		fs.seekg(0);
 		fs.read(reinterpret_cast<char*>(weights), 2*nTotal*sizeof(float));
 		fs.close();
-
-		for (int i = 0; i < 2*nTotal; i++) {
-			std::cout << weights[i] << '\n';
-		}
-		std::cout << std::endl;
 	}
 	else {
 		for (int i = 0; i < 2*nTotal; i++)
@@ -94,7 +50,8 @@ int main()
 	sf::Font hand2;
 	hand2.loadFromFile("resources/fonts/sanafon.ttf");
 
-	std::vector<sf::Font*> fonts {&computer, &calligraphy, &hand1, &hand2};
+	const int nFonts = 4;
+	sf::Font* fonts[nFonts] {&computer, &calligraphy, &hand1, &hand2};
 
 	sf::Text question;
 	question.setCharacterSize(192);
@@ -119,7 +76,7 @@ int main()
 	int index;
 
 	std::function<void()> changeChar = [&]() {
-		question.setFont(*fonts[rand() % fonts.size()]);
+		question.setFont(*fonts[rand() % nFonts]);
 		index = dd(gen);
 		wchar_t chosenChar = kana[index];
 		question.setString(chosenChar);
@@ -179,7 +136,7 @@ int main()
 			}
 		}
 
-		if (clock.getElapsedTime().asSeconds() > 2 && !failed) {
+		if (clock.getElapsedTime().asSeconds() > timeout && !failed) {
 			fail(failAnswer, index);
 			failed = true;
 		}
