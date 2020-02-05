@@ -2,6 +2,7 @@
 #include "KeyRead.hpp"
 #include "Kana.hpp"
 #include "Card.hpp"
+#include "Results.hpp"
 #include <iostream>
 #include <random>
 #include <fstream>
@@ -11,7 +12,7 @@ const float timeout = 2.f;
 
 void fail(sf::Text& failText, int index) {
 	failText.setString(romaji[index % nTotal]);
-	sf::Rect textBounds = failText.getLocalBounds();
+	sf::FloatRect textBounds = failText.getLocalBounds();
 	failText.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
 }
 
@@ -37,7 +38,7 @@ int main()
 	std::discrete_distribution<int> dd(weights, weights + 2*nTotal);
 	std::default_random_engine gen(time(NULL));
 
-	sf::RenderWindow window(sf::VideoMode(900, 800), "Kana trainer");
+	sf::RenderWindow window(sf::VideoMode(900, 700), "Kana trainer");
 	sf::Vector2f winSize = (sf::Vector2f) window.getSize();
 	window.setFramerateLimit(60);
 
@@ -86,87 +87,117 @@ int main()
 
 	sf::Clock clock;
 
+	enum Screens {
+		MAIN, RESULTS
+	} screen = MAIN;
+
+	Results results(&computer);
+	sf::FloatRect resultsBounds = results.getLocalBounds();
+	results.setOrigin(sf::Vector2f(resultsBounds.left + resultsBounds.width, resultsBounds.top + resultsBounds.height) / 2.f);
+	results.setPosition(winSize.x / 2, winSize.y / 2);
+
 	while (window.isOpen())
 	{
-		while (window.pollEvent(haps))
-		{
-			if (haps.type == sf::Event::Closed)
-				window.close();
-			else if (haps.type == sf::Event::KeyPressed) {
-				bool stillMoving = false;
-				for (int i = 0; i < 2*trail + 1; i++) {
-					if (questions[i] != nullptr && questions[i]->isMoving()) {
-						stillMoving = true;
-						break;
-					}
-				}
-				if (!stillMoving) {
-					sf::String ans = answer.getString();
-					if (haps.key.code == sf::Keyboard::BackSpace && ans.getSize() > 0) {
-						answer.setString(ans.substring(0, ans.getSize() - 1));
-						if (!failed) {
-							fail(failAnswer, currentIndex);
-							failed = true;
-						}
+		if (screen == MAIN) {
+			while (window.pollEvent(haps)) {
+				if (haps.type == sf::Event::Closed)
+					window.close();
+				else if (haps.type == sf::Event::KeyPressed) {
+					if (haps.key.code == sf::Keyboard::Escape) {
+						screen = RESULTS;
+						results.update(&(weights[0]));
 					}
 					else {
-						answer.setString(ans + keyToStr(haps.key.code));
-					}
-					sf::Rect textBounds = answer.getLocalBounds();
-					answer.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
-
-					ans = answer.getString();
-					if (ans == romaji[currentIndex % nTotal]) {
-						if (failed) {
-							failAnswer.setString("");
-							failed = false;
-
-							weights[currentIndex] = fminf(weights[currentIndex] * 2.f, 10.f);
+						bool stillMoving = false;
+						for (int i = 0; i < 2*trail + 1; i++) {
+							if (questions[i] != nullptr && questions[i]->isMoving()) {
+								stillMoving = true;
+								break;
+							}
 						}
-						else {
-							weights[currentIndex] = fmaxf(weights[currentIndex] / 1.5f, .25f);
-						}
+						if (!stillMoving) {
+							sf::String ans = answer.getString();
+							if (haps.key.code == sf::Keyboard::BackSpace && ans.getSize() > 0) {
+								answer.setString(ans.substring(0, ans.getSize() - 1));
+								if (!failed) {
+									fail(failAnswer, currentIndex);
+									failed = true;
+								}
+							}
+							else {
+								answer.setString(ans + keyToStr(haps.key.code));
+							}
+							sf::FloatRect textBounds = answer.getLocalBounds();
+							answer.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
 
-						//Advance the card queue
-						if (questions[2*trail] != nullptr) {
-							delete questions[2*trail];
-						}
-						for (int i = 2*trail; i > 0; i--) {
-							questions[i] = questions[i-1];
-							if (questions[i] != nullptr)
-								questions[i]->startMoving(i == trail);
-						}
-						currentIndex = questions[trail]->getIndex();
+							ans = answer.getString();
+							if (ans == romaji[currentIndex % nTotal]) {
+								if (failed) {
+									failAnswer.setString("");
+									failed = false;
 
-						//Generate a new card
-						dd = std::discrete_distribution(weights, weights + 2*nTotal);
-						questions[0] = new Card(dd(gen), fonts[rand() % nFonts]);
-						questions[0]->setPosition(winSize.x / 2 + 200 + 100*trail, winSize.y / 4);
-						questions[0]->startMoving();
+									weights[currentIndex] = fminf(weights[currentIndex] * 2.f, 10.f);
+								}
+								else {
+									weights[currentIndex] = fmaxf(weights[currentIndex] / 1.5f, .25f);
+								}
 
-						answer.setString("");
-						clock.restart();
+								//Advance the card queue
+								if (questions[2*trail] != nullptr) {
+									delete questions[2*trail];
+								}
+								for (int i = 2*trail; i > 0; i--) {
+									questions[i] = questions[i-1];
+									if (questions[i] != nullptr)
+										questions[i]->startMoving(i == trail);
+								}
+								currentIndex = questions[trail]->getIndex();
+
+								//Generate a new card
+								dd = std::discrete_distribution(weights, weights + 2*nTotal);
+								questions[0] = new Card(dd(gen), fonts[rand() % nFonts]);
+								questions[0]->setPosition(winSize.x / 2 + 200 + 100*trail, winSize.y / 4);
+								questions[0]->startMoving();
+
+								answer.setString("");
+								clock.restart();
+							}
+						}
 					}
 				}
 			}
-		}
 
-		if (clock.getElapsedTime().asSeconds() > timeout && !failed) {
-			fail(failAnswer, currentIndex);
-			failed = true;
-		}
-
-		window.clear();
-		for (int i = 0; i < 2*trail+1; i++) {
-			if (questions[i] != nullptr) {
-				questions[i]->update();
-				window.draw(*questions[i]);
+			if (clock.getElapsedTime().asSeconds() > timeout && !failed) {
+				fail(failAnswer, currentIndex);
+				failed = true;
 			}
+
+			window.clear();
+			for (int i = 0; i < 2*trail+1; i++) {
+				if (questions[i] != nullptr) {
+					questions[i]->update();
+					window.draw(*questions[i]);
+				}
+			}
+			
+			window.draw(answer);
+			window.draw(failAnswer);
+			window.display();
 		}
-		
-		window.draw(answer);
-		window.draw(failAnswer);
-		window.display();
+		else if (screen == RESULTS) {
+			while (window.pollEvent(haps)) {
+				if (haps.type == sf::Event::Closed)
+					window.close();
+				else if (haps.type == sf::Event::KeyPressed && haps.key.code == sf::Keyboard::Escape) {
+					screen = MAIN;
+					clock.restart();
+				}
+			}
+
+			window.clear(sf::Color::Black);
+			window.draw(results);
+			window.display();
+		}
 	}
 
 	for (int i = 0; i < 2*trail + 1; i++) {
