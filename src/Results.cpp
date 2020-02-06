@@ -3,11 +3,11 @@
 const float cs = 30; //Character size
 const float csp = 45; //Character size + spacing
 
-Results::Results(sf::Font const* font) {
+Results::Results(sf::Font const& font) {
 	for (int i = 0; i < 2*nTotal; i++) {
 		_kanas[i].setCharacterSize(cs);
 		_kanas[i].setFillColor(sf::Color::Green);
-		_kanas[i].setFont(*font);
+		_kanas[i].setFont(font);
 		_kanas[i].setString(kana[i]);
 		sf::Rect textBounds = _kanas[i].getLocalBounds();
 		_kanas[i].setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);

@@ -16,9 +16,9 @@ float Card::mvSpeed_highlighted;
 sf::Vector2f Card::scaleSpeed;
 sf::Vector3f Card::colorSpeed;
 
-Card::Card(int index, sf::Font const* font, bool highlighted) {
+Card::Card(int index, sf::Font const& font, bool highlighted) {
 	_index = index;
-	_kana.setFont(*font);
+	_kana.setFont(font);
 	_kana.setString(kana[index]);
 	_kana.setCharacterSize(196);
 	sf::Rect textBounds = _kana.getLocalBounds();

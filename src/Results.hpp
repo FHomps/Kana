@@ -4,7 +4,7 @@
 class Results : public sf::Drawable, public sf::Transformable {
 public:
 
-Results(sf::Font const* font);
+Results(sf::Font const& font);
 void update(float* weights);
 
 sf::FloatRect getLocalBounds() const;

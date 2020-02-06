@@ -7,6 +7,8 @@
 #include <random>
 #include <fstream>
 #include <queue>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 const float timeout = 2.f;
 
@@ -16,24 +18,66 @@ void fail(sf::Text& failText, int index) {
 	failText.setOrigin(sf::Vector2f(textBounds.left + textBounds.width, textBounds.top + textBounds.height) / 2.f);
 }
 
+sf::Font const& randomFont(std::map<std::string, sf::Font> const& fonts) {
+	std::map<std::string, sf::Font>::const_iterator it = fonts.begin();
+	std::advance(it, rand() % fonts.size());
+	return it->second;
+}
+
 int main()
 {	
+	std::fstream file;
+	file.open("resources/fonts/kana/defaultFont.txt");
+	std::string defaultFontName;
+	if (file.is_open()) {
+		std::getline(file, defaultFontName);
+		file.close();
+	}
+
+	std::map<std::string, sf::Font> fonts;
+	sf::Font* defaultKanaFont = nullptr;
+	for (const fs::directory_entry& entry : fs::directory_iterator("resources/fonts/kana/")) {
+		if (entry.path().extension() == ".otf" || entry.path().extension() == ".ttf") {
+			if (!fonts[entry.path().filename()].loadFromFile(entry.path().string())) {
+				fonts.erase(entry.path().filename());
+			}
+			else if (entry.path().string() == defaultFontName) {
+				defaultKanaFont = &fonts[entry.path().filename()];
+			}
+		}
+	}
+	if (defaultKanaFont == nullptr) {
+		defaultKanaFont = &fonts.begin()->second;
+	}
+	
+	for (std::pair<const std::string, sf::Font>& entry : fonts) {
+		std::cout << entry.first << std::endl;
+	}
+	
+	sf::Font romajiFont;
+	for (const fs::directory_entry& entry : fs::directory_iterator("resources/fonts/romaji/")) {
+		if (entry.path().extension() == ".otf" || entry.path().extension() == ".ttf") {
+			if (romajiFont.loadFromFile(entry.path().string())) {
+				break;
+			}
+		}
+	}
+
 	float weights[2*nTotal];
 
-	std::fstream fs;
-	fs.open("data/weights.bin", std::ios::binary | std::ios::in | std::ios::ate);
+	file.open("data/weights.bin", std::ios::binary | std::ios::in | std::ios::ate);
 	
-	if (fs.is_open() && fs.tellg() == 2*nTotal*sizeof(float)) {
-		fs.seekg(0);
-		fs.read(reinterpret_cast<char*>(weights), 2*nTotal*sizeof(float));
-		fs.close();
+	if (file.is_open() && file.tellg() == 2*nTotal*sizeof(float)) {
+		file.seekg(0);
+		file.read(reinterpret_cast<char*>(weights), 2*nTotal*sizeof(float));
+		file.close();
 	}
 	else {
 		for (int i = 0; i < 2*nTotal; i++)
 		weights[i] = 1.f;
 	}
 	
-	fs.close();
+	file.close();
 
 	std::discrete_distribution<int> dd(weights, weights + 2*nTotal);
 	std::default_random_engine gen(time(NULL));
@@ -44,42 +88,27 @@ int main()
 
 	sf::Event haps;
 
-	sf::Font computer;
-	computer.loadFromFile("resources/fonts/HanSerif.otf");
-	sf::Font calligraphy;
-	calligraphy.loadFromFile("resources/fonts/nagayama.otf");
-	sf::Font hand1;
-	hand1.loadFromFile("resources/fonts/mitsu.ttf");
-	sf::Font hand2;
-	hand2.loadFromFile("resources/fonts/sanafon.ttf");
-
-	const int nFonts = 4;
-	sf::Font* fonts[nFonts] {&computer, &calligraphy, &hand1, &hand2};
-
-	sf::Font openSans;
-	openSans.loadFromFile("resources/fonts/OpenSans.ttf");
-
 	const int trail = 2;
 	Card* questions[2 * trail + 1];
 	for (int i = 0; i < 2*trail+1; i++)
 		questions[i] = nullptr;
-	questions[trail] = new Card(dd(gen), fonts[rand() % nFonts], true);
+	questions[trail] = new Card(dd(gen), randomFont(fonts), true);
 	questions[trail]->setPosition(winSize.x / 2, winSize.y / 4);
 	for (int i = trail - 1; i >= 0; i--) {
-		questions[i] = new Card(dd(gen), fonts[rand() % nFonts]);
+		questions[i] = new Card(dd(gen), randomFont(fonts));
 		questions[i]->setPosition(winSize.x / 2 + 100 + 100*(trail-i), winSize.y / 4);
 	}
 
 	int currentIndex = questions[trail]->getIndex();
 
 	sf::Text answer;
-	answer.setFont(openSans);
+	answer.setFont(romajiFont);
 	answer.setCharacterSize(96);
 	answer.setPosition(winSize.x / 2, 2 * winSize.y / 3);
 
 	bool failed = false;
 	sf::Text failAnswer;
-	failAnswer.setFont(openSans);
+	failAnswer.setFont(romajiFont);
 	failAnswer.setCharacterSize(48);
 	failAnswer.setPosition(winSize.x / 2, 4 * winSize.y / 5);
 	failAnswer.setString("");
@@ -91,7 +120,7 @@ int main()
 		MAIN, RESULTS
 	} screen = MAIN;
 
-	Results results(&computer);
+	Results results(*defaultKanaFont);
 	sf::FloatRect resultsBounds = results.getLocalBounds();
 	results.setOrigin(sf::Vector2f(resultsBounds.left + resultsBounds.width, resultsBounds.top + resultsBounds.height) / 2.f);
 	results.setPosition(winSize.x / 2, winSize.y / 2);
@@ -158,7 +187,7 @@ int main()
 								float weightBuffer = weights[questions[1]->getIndex()];
 								weights[questions[1]->getIndex()] = 0;
 								dd = std::discrete_distribution<int>(weights, weights + 2*nTotal);
-								questions[0] = new Card(dd(gen), fonts[rand() % nFonts]);
+								questions[0] = new Card(dd(gen), randomFont(fonts));
 								weights[questions[1]->getIndex()] = weightBuffer;
 
 								questions[0]->setPosition(winSize.x / 2 + 200 + 100*trail, winSize.y / 4);
@@ -210,11 +239,11 @@ int main()
 			delete questions[i];
 	}
 	
-	fs.open("data/weights.bin", std::ios::binary | std::ios::out | std::ios::trunc);
-	if (fs.is_open()) {
-		fs.write(reinterpret_cast<char*>(weights), 2*nTotal*sizeof(float));
+	file.open("data/weights.bin", std::ios::binary | std::ios::out | std::ios::trunc);
+	if (file.is_open()) {
+		file.write(reinterpret_cast<char*>(weights), 2*nTotal*sizeof(float));
 	}
-	fs.close();
+	file.close();
 
 	return 0;
 }

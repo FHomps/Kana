@@ -3,7 +3,7 @@
 
 class Card : public sf::Drawable, public sf::Transformable {
 public:
-	Card(int kanaIndex, sf::Font const* font, bool highlighted = false);
+	Card(int kanaIndex, sf::Font const& font, bool highlighted = false);
 
 	int getIndex() const { return _index; }
 
